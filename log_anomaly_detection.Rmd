@@ -1,0 +1,287 @@
+---
+title: "Anamoly Detection in Host Log Files"
+author: "Kate Stadelman"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggpubr)
+library(cowplot)
+library(GGally)
+library('Rcpp')
+library(isotree)
+
+```
+
+## Data Analysis
+
+First, we perform preliminary analysis of aggregated logs. We explore each variable individually and then their pairwise relationships.
+
+```{r}
+
+# Import data and check data types
+data <- read.csv("aggregated_host_logs.csv", header=TRUE, sep=",")
+
+# Variables have extreme scales, so tranform using log
+# Many users have 0 values, so add 1 to prevent negative infinity values
+logs <- data
+logs$logins <- log(data$login_auth_attempts + 1)
+logs$failures <- log(data$failed_logins + 1)
+logs$hosts <- log(data$hosts_accessed + 1)
+logs$processes <- log(data$processes_started + 1)
+logs$priv_actions <- log(data$privileged_actions + 1)
+logs$mapped_creds <- log(data$mapped_credentials + 1)
+
+# Select data for model
+logs <- dplyr::select(logs, user_name, logins, failures, hosts, processes, priv_actions, 
+                      mapped_creds)
+
+str(logs)
+
+```
+
+
+```{r}
+
+# Login & Authorization Attempts Plots
+login.g1 <- ggqqplot(logs, x="logins") + labs(title="QQPlot")
+
+login.g2 <- ggplot(dat=logs, aes(y=logins)) + geom_boxplot() + 
+  labs(title="Box Plot", y="Login Attempts (Log)")
+
+login.g3 <- ggplot(dat=logs, aes(x=logins)) + geom_histogram(binwidth=1) +
+  labs(title="Histogram", x="Login Attempts (Log)", y="Count of Users")
+
+login.g <- plot_grid(login.g1, login.g2, login.g3, labels='AUTO')
+
+login.title <- ggdraw() + draw_label("Login & Authorization Attempts", fontface='bold')
+
+(plot_grid(login.title, login.g, ncol=1, rel_heights=c(0.1, 1)))
+
+```
+
+
+```{r}
+
+# Failed Logins
+fail.g1 <- ggqqplot(logs, x="failures") + labs(title="QQPlot")
+
+fail.g2 <- ggplot(dat=logs, aes(y=failures)) + geom_boxplot() + 
+  labs(title="Box Plot", y="Failed Logins (Log)")
+
+fail.g3 <- ggplot(dat=logs, aes(x=failures)) + geom_histogram(binwidth=0.8) +
+  labs(title="Histogram", x="Failed Logins (Log)", y="Count of Users")
+
+fail.g <- plot_grid(fail.g1, fail.g2, fail.g3, labels='AUTO')
+
+fail.title <- ggdraw() + draw_label("Failed Logins", fontface='bold')
+
+(plot_grid(fail.title, fail.g, ncol=1, rel_heights=c(0.1, 1)))
+
+```
+
+
+```{r}
+
+# Hosts Accessed
+host.g1 <- ggqqplot(logs, x="hosts") + labs(title="QQPlot")
+
+host.g2 <- ggplot(dat=logs, aes(y=hosts)) + geom_boxplot() + 
+  labs(title="Box Plot", y="Hosts Accessed (Log)")
+
+host.g3 <- ggplot(dat=logs, aes(x=hosts)) + geom_histogram(binwidth=0.4) +
+  labs(title="Histogram", x="Hosts Accessed (Log)", y="Count of Users")
+
+host.g <- plot_grid(host.g1, host.g2, host.g3, labels='AUTO')
+
+host.title <- ggdraw() + draw_label("Hosts Accessed", fontface='bold')
+
+(plot_grid(host.title, host.g, ncol=1, rel_heights=c(0.1, 1)))
+
+```
+
+
+```{r}
+
+# Processes Started
+process.g1 <- ggqqplot(logs, x="processes") + labs(title="QQPlot")
+
+process.g2 <- ggplot(dat=logs, aes(y=processes)) + geom_boxplot() + 
+  labs(title="Box Plot", y="Processes Started (Log)")
+
+process.g3 <- ggplot(dat=logs, aes(x=processes)) + geom_histogram(binwidth=1) +
+  labs(title="Histogram", x="Processes Started (Log)", y="Count of Users")
+
+process.g <- plot_grid(process.g1, process.g2, process.g3, labels='AUTO')
+
+process.title <- ggdraw() + draw_label("Processes Started", fontface='bold')
+
+(plot_grid(process.title, process.g, ncol=1, rel_heights=c(0.1, 1)))
+
+```
+
+
+```{r}
+
+# Privileged Actions
+priv.g1 <- ggqqplot(logs, x="priv_actions") + labs(title="QQPlot")
+
+priv.g2 <- ggplot(dat=logs, aes(y=priv_actions)) + geom_boxplot() + 
+  labs(title="Box Plot", y="Privileged Actions (Log)")
+
+priv.g3 <- ggplot(dat=logs, aes(x=priv_actions)) + geom_histogram(binwidth=1) +
+  labs(title="Histogram", x="Privileged Actions (Log)", y="Count of Users")
+
+priv.g <- plot_grid(priv.g1, priv.g2, priv.g3, labels='AUTO')
+
+priv.title <- ggdraw() + draw_label("Privileged Actions", fontface='bold')
+
+(plot_grid(priv.title, priv.g, ncol=1, rel_heights=c(0.1, 1)))
+
+```
+
+
+```{r}
+
+# Mapped Credentials
+creds.g1 <- ggqqplot(logs, x="mapped_creds") + labs(title="QQPlot")
+
+creds.g2 <- ggplot(dat=logs, aes(y=mapped_creds)) + geom_boxplot() + 
+  labs(title="Box Plot", y="Mapped Credentials (Log)")
+
+creds.g3 <- ggplot(dat=logs, aes(x=mapped_creds)) + geom_histogram(binwidth=1) +
+  labs(title="Histogram", x="Mapped Credentials (Log)", y="Count of Users")
+
+creds.g <- plot_grid(creds.g1, creds.g2, creds.g3, labels='AUTO')
+
+creds.title <- ggdraw() + draw_label("Mapped Credentials", fontface='bold')
+
+(plot_grid(creds.title, creds.g, ncol=1, rel_heights=c(0.1, 1)))
+
+```
+
+While we cannot be certain that our observations are truly independent (the same bad actor may compromise multiple users), it is still interesting to compare variables so we can eliminate any that are redundant.
+
+```{r}
+
+# Scatterplot Matrix
+(ggpairs(logs[-c(1)], aes(alpha=1/200), title="User Activity Scatterplot Matrix"))
+
+```
+
+Results from the scatterplot matrix indicate that login attempts and mapped credentials are highly correlated, suggesting that mapped credentials might me redundant to login attempts, so we will remove mapped credentials from our data set before creating our model.
+
+```{r}
+
+logs <- within(logs,rm("mapped_creds"))
+
+```
+
+
+## Isolation Forest
+
+
+```{r}
+
+# Split data into train and test sets
+n <- nrow(logs)
+
+set.seed(123456)
+tv.split <- sample(rep(0:1,c(round(n*.5),n-round(n*.5))),n)
+
+dat.train <- logs[tv.split==1,] 
+dat.test <- logs[tv.split==0,] 
+
+```
+
+
+
+```{r}
+
+# Generate Isolation Forest Model
+logs.iForest <- isolation.forest(dat.train[-c(1)], output_score = TRUE )
+
+summary.isolation_forest(logs.iForest$model)
+
+```
+
+
+```{r}
+
+# Review distribution of Isolation Forest scores to determine outlier threshold
+dat.train$score <- logs.iForest$scores
+
+# Visualize distribution of Isolation Forest scores on training set
+ggplot(dat.train, aes(x=score)) + geom_density() +
+  labs(title="Density of Isolation Forest Scores (Train)")
+
+```
+
+
+```{r}
+
+# Set outlier threshold and determine anomalies in training set
+outlier.threshold <- 0.7
+
+dat.train$outlier <- factor(ifelse(dat.train$score >= outlier.threshold,'Outlier','Normal'),
+                               levels=c('Outlier','Normal'))
+
+table(dat.train$outlier)
+
+```
+
+
+
+```{r}
+
+# Visualize outliers identified in training set
+ggpairs(dat.train[-c(1,7,8)], aes(colour = dat.train$outlier, alpha = 1/200),
+        title="Outlier vs. Normal User Activity Scatterplot Matrix (Train)")
+
+```
+
+
+```{r}
+
+# Use model to detect outliers in test data
+dat.test$score <- predict.isolation_forest(logs.iForest$model, newdata=dat.test[-c(1)])
+
+# Visualize distribution of Isolation Forest scores on test set
+ggplot(dat.test, aes(x=score)) + geom_density() +
+  labs(title="Density of Isolation Forest Scores (Test)")
+
+```
+
+
+
+```{r}
+
+# Determine outliers in test set
+dat.test$outlier <- factor(ifelse(dat.test$score >= outlier.threshold,'Outlier','Normal'),
+                               levels=c('Outlier','Normal'))
+table(dat.test$outlier)
+
+```
+
+
+```{r}
+
+# Visualize outliers identified in training set
+ggpairs(dat.test[-c(1,7,8)], aes(colour = dat.test$outlier, alpha = 1/200),
+        title="Outlier vs. Normal User Activity Scatterplot Matrix (Test)") 
+
+```
+
+
+```{r}
+
+# Display original data for outliers from test set
+anomalous_users <- dat.test[dat.test$outlier == 'Outlier', c(1,7)]
+anomalous_users <- merge(anomalous_users, data, by='user_name')
+anomalous_users <- anomalous_users[order(anomalous_users$score, decreasing = TRUE),]
+anomalous_users
+
+```
